@@ -1,0 +1,44 @@
+{
+  "name": "puppettievid",
+  "version": "0.1.0",
+  "description": "Lottie json to video file using pupetter",
+  "type": "module",
+  "license": "GPL-3.0 license",
+  "homepage": "https://github.com/biojet1/puppettievid",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/biojet1/puppettievid"
+  },
+  "keywords": [
+    "lottie",
+    "convert",
+    "mp4",
+    "webm",
+    "movie",
+    "puppeteer",
+    "video"
+  ],
+  "contributors": [],
+  "devDependencies": {
+    "@types/yargs": "^17.0.32",
+    "typescript": "^5.4.3"
+  },
+  "dependencies": {
+    "puppeteer": "^22.6.0",
+    "tap": "^18.7.1",
+    "yargs": "^17.7.2"
+  },
+  "bin": {
+    "puppettievid": "./puppettievid.js"
+  },
+  "exports": {
+    ".": "./dist/index.js",
+    "./cli": "./dist/main.js"
+  },
+  "scripts": {
+    "c8rephtml": "c8 report -r html",
+    "build": "npx tsc -d --sourcemap",
+    "clean": "rm dist/*.*",
+    "test": "c8 npx tap -t600 --reporter=terse 'test/**/*.tap.*js'"
+  }
+}
