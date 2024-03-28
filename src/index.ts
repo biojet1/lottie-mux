@@ -1,14 +1,15 @@
-import { launch, Browser, LaunchOptions, BrowserLaunchArgumentOptions } from "puppeteer";
+import { launch, Browser, LaunchOptions, ScreenshotOptions, BrowserLaunchArgumentOptions } from "puppeteer";
 import path from "path";
 import { fileURLToPath } from 'node:url';
+import { Writable } from 'stream';
 import fs from "fs";
 import { ffParams } from "./ffparams.js";
 import { VideoOutParams, ffcmd } from "./ffmpeg.js";
 import { spawn, StdioOptions } from 'child_process';
 export async function render_lottie({
-  uri, file, output, width, height, par, quality,
-  puppeteer_options, type, browser, video_params = {}
-
+  uri, file, output, width = 0, height, par, quality,
+  puppeteer_options, browser, video_params = {}, sink,
+  bgcolor, fps
 }: {
   uri?: string,
   file?: string,
@@ -17,18 +18,20 @@ export async function render_lottie({
   height?: number,
   par?: string,
   quality?: number,
-  type?: 'mp4' | 'webm',
+  alpha?: boolean,
+  fps?: number,
   puppeteer_options?: BrowserLaunchArgumentOptions & LaunchOptions,
   browser?: Browser,
+  bgcolor?: string,
   video_params?: {
     codec?: string,
     suffix?: string,
     pix_fmt?: string,
-    alpha?: false,
     acodec?: string,
     preset?: string,
     crf?: number,
   },
+  sink?: Writable,
 }) {
 
   let html_file = import.meta.resolve('../lottie.html');
@@ -45,11 +48,6 @@ export async function render_lottie({
     browser = await launch(puppeteer_options);
   }
 
-
-
-
-
-
   // return;
 
   try {
@@ -60,60 +58,101 @@ export async function render_lottie({
     await page.evaluate(`
     const animationData = ${lottie_data};
     let animation = lottie.loadAnimation({
-      container: document.getElementById("root"),
+      container: document.body,
       loop: false,
       autoplay: false,
       animationData,
     });
+    const {w, h, fr} = animationData;
     `);
 
-    // let html = await page.content();
-    // console.log(html);
-    // fs.writeFileSync('/tmp/lot.html', html);
-    const rootHandle = await page.mainFrame().$('#root')
-    if (!rootHandle) {
+    if (bgcolor) {
+      page.evaluate(`document.body.style.backgroundColor = '${bgcolor}'`);
+    }
+    const div = await page.mainFrame().$('body')
+    if (!div) {
       return;
     }
-    const duration = parseFloat(await page.evaluate(`animation.getDuration()`) as string);
     const frames = parseInt(await page.evaluate(`animation.getDuration(true)`) as string);
     const frame_rate = parseFloat(await page.evaluate(`~~animationData.fr`) as string);
-    const width = parseInt(await page.evaluate(`animationData.w`) as string);
-    const height = parseInt(await page.evaluate(`animationData.h`) as string);
+    const W = parseInt(await page.evaluate(`animationData.w`) as string);
+    const H = parseInt(await page.evaluate(`animationData.h`) as string);
+    if (!fps) {
+      fps = frame_rate;
+    }
+    {// Size
+      if (!width) {
+        if (height) {
+          width = (height * W) / H;
+        } else {
+          width = W;
+          height = H;
+        }
+      } else if (!height) {
+        if (width) {
+          height = (width * H) / W;
+        } else {
+          width = W;
+          height = H;
+        }
+      }
+      await page.evaluate(`document.body.style.height = "${height}px"`);
+      await page.evaluate(`document.body.style.width = "${width}px"`);
+    }
+
     const start_frame = 0;
     const end_frame = frames;
-    console.log(`${frameTime(frames, frame_rate)}s ${frames} frames ${frame_rate} fps ${width}x${height}`);
+    console.log(`${frameTime(frames, frame_rate)}s ${frames} frames ${frame_rate} fps ${W}x${H} -> ${width}x${height}`);
 
-    let ffproc = await ffcmd({}, [width, height], false, video_params, output, frame_rate).then((args) => {
-      let [prog, ...rest] = args;
-      console.log(`${prog}`, ...rest);
-      return spawn(prog, rest, {
-        stdio: ['pipe', 'inherit', 'inherit'],
-      });
-    });
-
-    let sink = ffproc.stdin;
-    // fs.openSync()
-
-    // ffproc.
-    for (let frame = start_frame; frame < end_frame; ++frame) {
-      await page.evaluate(`animation.goToAndStop(${frame}, true)`);
-      const screenshot = await rootHandle.screenshot({
-        type: 'png',
-        // clip: { x: 0, y: 0, width, height },
-
-      });
-      process.stdout.write(`\r${frame} ${screenshot.byteLength}`);
-      // console.log(`\r${frame}`);
-      sink.write(screenshot);
+    {
+      let html = await page.content();
+      // console.log(html);
+      fs.writeFileSync('/tmp/lot.html', html);
     }
-    sink.end();
+
+    if (!sink) {
+      let ffproc = await ffcmd(fps, [width, height], false, output, video_params).then((cmd) => {
+        let [bin, ...args] = cmd;
+        console.log(`${bin}`, ...args);
+        return spawn(bin, args, {
+          stdio: ['pipe', 'inherit', 'inherit'],
+        });
+      });
+      sink = ffproc.stdin;
+    }
+    if (!sink) {
+      return;
+    }
+    const sso: ScreenshotOptions = {
+      type: 'png',
+      omitBackground: bgcolor ? false : true,
+      // clip: { x: 0, y: 0, width, height },
+    };
+
+    if (fps == frame_rate) {
+      for (let frame = start_frame; frame < end_frame; ++frame) {
+        await page.evaluate(`animation.goToAndStop(${frame}, true)`);
+        const screenshot = await div.screenshot(sso);
+        process.stdout.write(`\r${frame} ${screenshot.byteLength}`);
+        sink.write(screenshot);
+      }
+    } else {
+      const S = Math.round(start_frame * fps / frame_rate);
+      const E = Math.round(end_frame * fps / frame_rate);
+      for (let f = S; f < E; ++f) {
+        let frame = Math.round(f * frame_rate / fps);
+        await page.evaluate(`animation.goToAndStop(${frame}, true)`);
+        const screenshot = await div.screenshot(sso);
+        process.stdout.write(`\r${f} ${frame} ${screenshot.byteLength}`);
+        sink.write(screenshot);
+      }
+    }
   } finally {
+    if (sink) {
+      sink.end();
+    }
     browser.close();
-
   }
-
-
-
 }
 
 export function frameTime(N: number, fps: number) {

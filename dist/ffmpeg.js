@@ -1,8 +1,13 @@
 import { ffParams } from "./ffparams.js";
-export async function ffcmd(input_params, size, alpha, output_params, output_file, fps) {
+export async function ffcmd(fps, size, alpha, output_file, output_params, input_params = {}) {
     let output = {
         args: Array.from((function* () {
             let { suffix, pix_fmt, codec, acodec, preset, crf } = output_params;
+            if (!codec) {
+                if (output_file.endsWith(".mov")) {
+                    codec = 'qtrle';
+                }
+            }
             if (!codec) {
                 if (alpha) {
                     codec = 'qtrle';

@@ -11,12 +11,28 @@ export interface VideoOutParams {
     crf?: number,
 }
 
-export async function ffcmd(input_params: any, size: [number, number], alpha: boolean, output_params: VideoOutParams, output_file: string, fps: number) {
+export async function ffcmd(
+    fps: number,
+    size: [number, number],
+    alpha: boolean,
+    output_file: string,
+    output_params: VideoOutParams,
+
+    input_params: any = {},
+
+) {
 
     let output: Output = {
         args: Array.from(
             (function* () {
                 let { suffix, pix_fmt, codec, acodec, preset, crf } = output_params;
+
+                if (!codec) {
+                    if (output_file.endsWith(".mov")) {
+                        codec = 'qtrle';
+                    }
+                }
+
                 if (!codec) {
                     if (alpha) {
                         codec = 'qtrle';
@@ -24,6 +40,7 @@ export async function ffcmd(input_params: any, size: [number, number], alpha: bo
                         codec = 'libx264';
                     }
                 }
+
                 if (!pix_fmt) {
                     if (codec == 'libx264' && size[0] % 2 === 0 && size[1] % 2 === 0) {
                         pix_fmt = 'yuv420p';
@@ -62,7 +79,6 @@ export async function ffcmd(input_params: any, size: [number, number], alpha: bo
 
     }
     let input: Input = {
-
         args: [
             ['f', 'image2pipe'],
             ['s', `${size[0]}x${size[1]}`],
