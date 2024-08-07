@@ -1,13 +1,13 @@
 {
-  "name": "puppettievid",
-  "version": "0.1.0",
-  "description": "Lottie json to video file using pupetter",
+  "name": "lottie-mux",
+  "version": "0.2.0",
+  "description": "Lottie json to video file using puppeteer",
   "type": "module",
   "license": "GPL-3.0 license",
-  "homepage": "https://github.com/biojet1/puppettievid",
+  "homepage": "https://github.com/biojet1/lottie-mux",
   "repository": {
     "type": "git",
-    "url": "https://github.com/biojet1/puppettievid"
+    "url": "https://github.com/biojet1/lottie-mux"
   },
   "keywords": [
     "lottie",
@@ -29,7 +29,7 @@
     "yargs": "^17.7.2"
   },
   "bin": {
-    "puppettievid": "./puppettievid.js"
+    "lottie-mux": "./lottie-mux.js"
   },
   "exports": {
     ".": "./dist/index.js",
